@@ -1,0 +1,151 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// NextAuth Authentication Models
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(uuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  
+  accounts      Account[]
+  sessions      Session[]
+  
+  // App Specific Models
+  skills        UserSkill[]
+  learningPaths LearningPath[]
+  chatMessages  ChatMessage[]
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// App Models
+model UserSkill {
+  id        String   @id @default(uuid())
+  userId    String
+  skillName String
+  level     String   @default("beginner") // beginner, intermediate, advanced
+  completed Boolean  @default(false)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@unique([userId, skillName])
+}
+
+model LearningPath {
+  id             String     @id @default(uuid())
+  userId         String
+  goalTitle      String
+  timeframe      String
+  aiPlan         Json       // Stored generation from AI
+  
+  pathNodes      PathNode[]
+  user           User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+}
+
+model PathNode {
+  id          String       @id @default(uuid())
+  pathId      String
+  resourceId  String?
+  title       String
+  order       Int
+  completed   Boolean      @default(false)
+  
+  path        LearningPath @relation(fields: [pathId], references: [id], onDelete: Cascade)
+  resource    Resource?    @relation(fields: [resourceId], references: [id])
+}
+
+model Resource {
+  id          String     @id @default(uuid())
+  title       String
+  url         String
+  source      String
+  type        String     // video, article, course, doc
+  difficulty  String     // beginner, intermediate, advanced
+  
+  pathNodes   PathNode[]
+  
+  createdAt   DateTime   @default(now())
+}
+
+model ChatMessage {
+  id        String   @id @default(uuid())
+  userId    String
+  role      String   // user, assistant
+  content   String   @db.Text
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+}
+
+// Skill Graph mapping (Global graph)
+model SkillNode {
+  id        String      @id @default(uuid())
+  name      String      @unique
+  category  String
+  icon      String?
+  
+  fromEdges SkillEdge[] @relation("FromSkill")
+  toEdges   SkillEdge[] @relation("ToSkill")
+}
+
+model SkillEdge {
+  id           String    @id @default(uuid())
+  fromSkillId  String
+  toSkillId    String
+  relationship String    // e.g. "requires", "suggests"
+  
+  fromSkill    SkillNode @relation("FromSkill", fields: [fromSkillId], references: [id])
+  toSkill      SkillNode @relation("ToSkill", fields: [toSkillId], references: [id])
+
+  @@unique([fromSkillId, toSkillId])
+}
