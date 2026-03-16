@@ -23,6 +23,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import type { LearningPath } from "@/lib/schemas";
 import { useEduPathStore } from "@/lib/store";
+import { useSearchParams } from "next/navigation";
+import { useEffect, Suspense } from "react";
 
 const skillSuggestions = [
   "HTML", "CSS", "JavaScript", "TypeScript", "React", "Next.js",
@@ -42,7 +44,7 @@ const resourceIcons = {
   project: Code,
 };
 
-export default function LearningPathPage() {
+function LearningPathContent() {
   const { lastPath, setLastPath } = useEduPathStore();
   const [skills, setSkills] = useState<string[]>([]);
   const [skillInput, setSkillInput] = useState("");
@@ -51,6 +53,21 @@ export default function LearningPathPage() {
   const [path, setPath] = useState<LearningPath | null>(lastPath);
   const [loading, setLoading] = useState(false);
   const [expandedPhases, setExpandedPhases] = useState<Set<number>>(new Set([0]));
+
+  const searchParams = useSearchParams();
+  const preset = searchParams?.get("preset");
+
+  // Auto-start generation if preset query parameter is present
+  useEffect(() => {
+    if (preset && !path && !loading) {
+      setGoalRole(preset);
+      // Wait a tiny bit for state to settle, then auto-generate
+      const timer = setTimeout(() => {
+        handleGenerate(preset);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [preset, path, loading]);
 
   const addSkill = (skill: string) => {
     if (skill && !skills.includes(skill)) {
@@ -66,13 +83,14 @@ export default function LearningPathPage() {
     setExpandedPhases(next);
   };
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (overrideRole?: string) => {
     setLoading(true);
+    const targetRole = overrideRole || goalRole;
     try {
       const res = await fetch("/api/generate-path", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currentSkills: skills, goalRole, timeframe }),
+        body: JSON.stringify({ currentSkills: skills, goalRole: targetRole, timeframe }),
       });
       const data = await res.json();
       if (data.error) {
@@ -82,6 +100,10 @@ export default function LearningPathPage() {
       }
       setPath(data);
       setLastPath(data);
+      // Add to gamified store
+      const { addActivePath } = useEduPathStore.getState();
+      addActivePath(data);
+      setExpandedPhases(new Set([0]));
       setExpandedPhases(new Set([0]));
     } catch (err) {
       console.error("Failed to generate path:", err);
@@ -200,7 +222,7 @@ export default function LearningPathPage() {
           </div>
 
           <Button
-            onClick={handleGenerate}
+            onClick={() => handleGenerate()}
             disabled={loading || !goalRole.trim()}
             className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white border-0 py-6 text-base"
           >
@@ -358,5 +380,13 @@ export default function LearningPathPage() {
         </motion.div>
       )}
     </div>
+  );
+}
+
+export default function LearningPathPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center p-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>}>
+      <LearningPathContent />
+    </Suspense>
   );
 }

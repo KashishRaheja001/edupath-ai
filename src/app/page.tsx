@@ -66,8 +66,14 @@ export default function LandingPage() {
           </Link>
           <div className="flex items-center gap-4">
             <Link
+              href="/explore"
+              className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
+            >
+              Explore Skills
+            </Link>
+            <Link
               href="/dashboard"
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors"
             >
               Dashboard
             </Link>
